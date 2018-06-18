@@ -1,0 +1,25 @@
+name: "GatheringEnv"
+verbose: 0
+base_map: "map32_4rooms_freeroad"
+map_size: [32,32]
+map_view_extend: 0
+env_max_steps_no: 50
+no_envs: 30
+no_agents: 10
+agents_collide: no
+hide_other_agents: yes
+partial_observable: [0, 4]
+agents_init_pos: [[-1, 5, 5, 4]]
+agents_init_colors: [[-1, 0]]
+use_laser: no
+agents_laser_size: 2
+reward_distance: yes
+reward_value: 1.
+reward_respawn_time: 0
+use_cuda: no
+visualize_rgb: yes
+store_agents_trace: no
+visualize: no
+record_data:
+  turned_on: no
+  only_coord: no
