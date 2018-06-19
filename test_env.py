@@ -9,7 +9,6 @@ if __name__ == '__main__':
 
     # Get default config
     cfg = get_config("default")
-    print(cfg)
 
     EVAL_STEPS = 100000
 

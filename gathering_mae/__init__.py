@@ -1,8 +1,8 @@
 from .gathering_env import GatheringEnv
-from .maps import get_map_path
+from .single_agent_wrapper import SingleAgentGatheringEnv
 
 ALL_ENV = [
-    "GatheringEnv"
+    "GatheringEnv", "SingleAgentGatheringEnv"
 ]
 
 
@@ -16,5 +16,7 @@ def get_env(name, cfg):
 
     if name == "GatheringEnv":
         _Env = GatheringEnv
+    elif name == "SingleAgentGatheringEnv":
+        _Env = SingleAgentGatheringEnv
 
     return _Env(cfg)

@@ -32,12 +32,16 @@ import numpy as np
 from collections import deque
 from gym import spaces
 import copy
+import os
 
 from . import util
 from .util import get_gray_color
-from .maps import get_map_path
 from .base_env import MultiAgentBaseEnv
 from .elements_definitions import *
+
+
+def get_linear_pos(x, y, width):
+    return x * width + y
 
 
 class MapManager:
@@ -95,7 +99,8 @@ class MapManager:
     gray_to_bgr = gray_to_bgr[:, [2, 1, 0]]
 
     def __init__(self, cfg):
-        base_map_path = get_map_path(cfg.base_map)
+        base_map_path = cfg.base_map if os.path.isfile(cfg.base_map) else \
+            get_map_path(cfg.base_map)
         self.map_size = map_size = cfg.map_size
         self.map_view_extend = cfg.map_view_extend
         self.use_cuda = cfg.use_cuda
@@ -347,6 +352,39 @@ class MapManager:
 
         return agents_b_map, agents_d, agents_d_c, agents_coord
 
+    def init_elements(self, map_, occupancy_map, init_pos):
+        """
+        init_pos: [(idx_map, no_items, x, y, radius zone to place randomly)]
+        """
+        # Should return closest available position
+        map_x, map_y = self.map_size
+
+        # Generate for each initialized element an entry point with initialization
+        el_init = dict()
+
+        for ix_map, no_items, x, y, r in init_pos:
+
+            x0 = max(0, x - r)
+            x1 = min(map_x, x + r)
+            y0 = max(0, y - r)
+            y1 = min(map_y, y + r)
+
+            empty_coord = (occupancy_map[x0:x1, y0:y1] == DEFAULT_ELEMENT_ID).nonzero()
+
+            select_idxs = torch.randperm(empty_coord.size(0))
+            if no_items == -1:
+                # Fill zone
+                no_items = empty_coord.size(0)
+
+            select_idxs = select_idxs[:no_items]
+            if select_idxs.size(0) > 0:
+                for iselect in select_idxs:
+                    x_p, y_p = empty_coord[iselect]
+                    map_[ix_map, x_p, y_p] = 1
+                    el_init[get_linear_pos(x_p, y_p, map_y).item()] = (ix_map, 1, x, y, r)
+
+        return el_init
+
     def build_static_map_views(self):
         static_map = self.base_static_map
         use_cuda = self.use_cuda
@@ -373,7 +411,7 @@ class MapManager:
 
         full_view = map_static_view
         map_static_view = map_static_view[extend_view_r: rm, extend_view_r: cm]
-        return map_static_view, full_view, extend_view_r
+        return map_static_view.clone(), full_view.clone(), extend_view_r
 
     def build_maps(self, special_map, agents_dir, agents_coord):
         # We consider static map unchanged and already loaded
@@ -532,9 +570,10 @@ class GatheringEnv(MultiAgentBaseEnv):
         self.use_laser = use_laser = cfg.use_laser
         self.agents_laser_size = laser_size = cfg.agents_laser_size
 
-        self.reward_value = cfg.reward_value
-        self.reward_respawn_time = cfg.reward_respawn_time
+        self.rewards_value = cfg.reward_value
+        self.rewards_respawn_time = cfg.reward_respawn_time
         self.reward_distance = cfg.reward_distance
+        self.reward_init_pos = cfg.reward_init_pos
 
         # Agent stuff
         # agents_map[x,y, agent_idx] != 0 -> [0,1,2,3] (direction N, E, S, V)
@@ -554,7 +593,9 @@ class GatheringEnv(MultiAgentBaseEnv):
         self.move_map = map_manager.generate_operation_savers()
 
         # Special elements variables
-        self.el_reward_respawn = deque()
+        self.el_rewards_respawn = None
+        self.el_init = None
+
         self.laser_coord = laser_coord = []
         for x, y in ACTIONS_MOVE:
             if x == 0:
@@ -588,30 +629,37 @@ class GatheringEnv(MultiAgentBaseEnv):
         agents_coord = self.agents_coord
         agents_collide = self.agents_collide
         reward = torch.zeros(no_agents)
-        reward_respawn_time = self.reward_respawn_time
-        reward_val = self.reward_value
+        rewards_respawn_time = self.rewards_respawn_time
+        rewards_val = self.rewards_value
         move_map = self.move_map
-        el_reward_respawn = self.el_reward_respawn
+        el_rewards_respawn = self.el_rewards_respawn
         step_cnt = self.step_cnt
+        map_manager = self.map_manager
+
         reward_distance = self.reward_distance
         if reward_distance:
             reward_ref = self.reward_distance_ref
             max_reward_distance = self.max_reward_distance
 
         # Reset direction & laser special maps map
-        reward_map = special_map[REWARD_ID]
+        rewards_ids = ALL_REWARD_IDS
         laser_map = special_map[LASER_ID]
-
         laser_map.zero_()
 
-        if reward_respawn_time != 0:
-            el_reward_respawn = self.el_reward_respawn
-            if len(el_reward_respawn) > 0:
-                while el_reward_respawn[0][0] < self.step_cnt:
-                    _, coord = el_reward_respawn.popleft()
-                    reward_map[coord] = 1.
-                    if len(el_reward_respawn) <= 0:
-                        break
+        for ix, el_reward_respawn in zip(rewards_ids, el_rewards_respawn):
+            if rewards_respawn_time[ix] != 0:
+                if len(el_reward_respawn) > 0:
+                    while el_reward_respawn[0][0] < step_cnt:
+                        _, coord, init_gen = el_reward_respawn.popleft()
+                        if init_gen == -1:
+                            special_map[ix][coord] = 1.
+                        else:
+                            self.el_init.update(map_manager.init_elements(special_map,
+                                                                          self.static_map,
+                                                                          init_gen))
+
+                        if len(el_reward_respawn) <= 0:
+                            break
 
         for ag_idx in self.range_agents:
             act = action[ag_idx]
@@ -628,12 +676,23 @@ class GatheringEnv(MultiAgentBaseEnv):
                         continue
 
                 # Check interactions with SPECIAL_ELEMENTS
-                if reward_map[new_coord] != 0:
-                    reward[ag_idx] += reward_val
-                    if reward_respawn_time != 0:
-                        reward_map[new_coord] = 0.
-                        el_reward_respawn.append((step_cnt + reward_respawn_time, new_coord))
+                for imap in rewards_ids:
+                    if special_map[imap][new_coord] != 0:
+                        reward[ag_idx] += rewards_val[imap]
+                        if rewards_respawn_time[imap] != 0:
+                            special_map[imap][new_coord] = 0.
 
+                            # Check generator
+                            next_stp = step_cnt + rewards_respawn_time[imap]
+                            if self.el_init:
+                                lcoord = get_linear_pos(new_coord[0], new_coord[1],
+                                                        special_map.size(2))
+                                init_gen = self.el_init.pop(lcoord, -1)
+                                if init_gen != -1:
+                                    init_gen = [init_gen]
+                                el_rewards_respawn[imap].append((next_stp, new_coord, init_gen))
+                            else:
+                                el_rewards_respawn[imap].append((next_stp, new_coord, -1))
                 # Move agent
                 agents_b_map[ag_idx, x, y] = 0.
                 agents_b_map[ag_idx][new_coord] = 1.
@@ -656,7 +715,7 @@ class GatheringEnv(MultiAgentBaseEnv):
             if reward_distance:
                 r = np.sqrt((reward_ref[0] - x) ** 2 + (reward_ref[1] - y) ** 2)
                 reward[ag_idx] += float((max_reward_distance - r) / max_reward_distance *
-                                        reward_val)
+                                        rewards_val)
 
         # Should calculate effect of laser after all agents have moved
         # TODO
@@ -697,16 +756,23 @@ class GatheringEnv(MultiAgentBaseEnv):
 
     def _reset(self):
         self.static_map, self.special_map = self.map_manager.reset_map()
-        self.el_reward_respawn = deque()
 
         if self.reward_distance:
             self.reward_distance_ref = self.special_map[REWARD_ID].nonzero()[0]
 
         # Position agents only on empty spaces
-        check_occupancy = self.static_map + self.special_map.sum(0)
+        check_occupancy = self.static_map
         _, self.agents_direction, self.agents_direction_coord, self.agents_coord = \
             self.map_manager.init_agents(check_occupancy, self.agent_init_pos,
                                          self.agents_binary_map, self.agents_collide)
+
+        if self.reward_init_pos:
+            self.el_init = self.map_manager.init_elements(self.special_map, self.static_map,
+                                                          self.reward_init_pos)
+        else:
+            self.el_init = dict()
+
+        self.el_rewards_respawn = [deque() for _ in range(len(self.rewards_value))]
 
         return self.map_manager.build_maps(self.special_map, self.agents_direction_coord,
                                            self.agents_coord)

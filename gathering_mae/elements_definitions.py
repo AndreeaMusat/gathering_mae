@@ -13,9 +13,11 @@ STATIC_ELEMENTS = [
 ]
 
 REWARD_ID = 0
-LASER_ID = 1
+ALL_REWARD_IDS = [0, 1]
+LASER_ID = 2
 SPECIAL_ELEMENTS = [
     ["o", (124, 252, 0), "reward"],
+    ["x", (255, 128, 0), "neg_reward"],
     ["l", (231, 172, 65), "laser"],
 ]
 

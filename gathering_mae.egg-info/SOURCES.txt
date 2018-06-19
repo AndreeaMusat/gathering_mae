@@ -1,0 +1,14 @@
+README.md
+setup.py
+gathering_mae/__init__.py
+gathering_mae/base_env.py
+gathering_mae/elements_definitions.py
+gathering_mae/gathering_env.py
+gathering_mae/single_agent_wrapper.py
+gathering_mae/util.py
+gathering_mae.egg-info/PKG-INFO
+gathering_mae.egg-info/SOURCES.txt
+gathering_mae.egg-info/dependency_links.txt
+gathering_mae.egg-info/entry_points.txt
+gathering_mae.egg-info/not-zip-safe
+gathering_mae.egg-info/top_level.txt

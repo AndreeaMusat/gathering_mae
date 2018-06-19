@@ -3,7 +3,7 @@ import cv2
 import time
 import numpy as np
 
-from env.gathering_env import GatheringEnv
+from gathering_mae.single_agent_wrapper import SingleAgentGatheringEnv
 from configs import get_config
 
 np.set_printoptions(threshold=np.nan, linewidth=np.nan, precision=2)
@@ -21,26 +21,26 @@ if __name__ == '__main__':
     cfg.visualize = True
     visualize = cfg.visualize
 
-    env = GatheringEnv(cfg)
+    env = SingleAgentGatheringEnv(cfg)
     env_step = 0
     ep_r = 0
 
-    done = torch.ones(1).byte()
+    done = 1
 
-    agent0_r = []
+    agent0_r = 0
     start_time = time.time()
     while env_step < EVAL_STEPS:
         # check if env needs reset
-        if done.any():
+        if done:
             obs, r, done = env.restart_game()
             if visualize:
                 env.render()
 
             print("Episode finished:")
-            print("Return per episode: {}".format(sum(agent0_r)))
-            print("Agent0 reward: {}".format(np.mean(agent0_r)))
+            print("Return per episode: {}".format(agent0_r))
+            print("Agent0 reward: {}".format(agent0_r))
 
-            agent0_r = []
+            agent0_r = 0
 
         actions = np.random.randint(7, size=no_agents)
 
@@ -72,13 +72,13 @@ if __name__ == '__main__':
                 else:
                     print("Unknown key: {}".format(key))
 
-        obs, r, done, _ = env.step(actions)
+        obs, r, done, _ = env.step(actions[0])
 
         env_step += 1
-        agent0_r.append(r[0])
+        agent0_r += r
 
         if visualize:
-            print(f"Step: {env_step};\t Reward: {r.numpy()}")
+            print(f"Step: {env_step};\t Reward: {r}")
             env.render()
 
         if env_step % 10000 == 0:
