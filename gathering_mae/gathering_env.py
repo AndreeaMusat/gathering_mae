@@ -781,10 +781,11 @@ class GatheringEnv(MultiAgentBaseEnv):
         return self.map_manager.build_maps(self.special_map, self.agents_direction_coord,
                                            self.agents_coord)
 
-    def _render(self):
+    def _render(self, imshow=False):
         view = self.map_manager.transform_observation_to_view(self.prev_observation)
-        cv2.imshow("Game", view)
-        return view
+        if imshow:
+            cv2.imshow("Game", view)
+        return cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
 
     @property
     def action_space(self):

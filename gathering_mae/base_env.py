@@ -59,10 +59,10 @@ class MultiAgentBaseEnv:
     def init_ep_record_data(self):
         raise NotImplementedError
 
-    def render(self):
-        return self._render()
+    def render(self, *args, **kwargs):
+        return self._render(*args, **kwargs)
 
-    def _render(self):
+    def _render(self, *args, **kwargs):
         raise NotImplementedError
 
     def _reset(self):

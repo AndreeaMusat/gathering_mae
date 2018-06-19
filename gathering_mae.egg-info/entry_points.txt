@@ -1,6 +1,0 @@
-[console_scripts]
-liftoff = liftoff.cmd:launch
-liftoff-abort = liftoff.cmd:abort
-liftoff-prepare = liftoff.cmd:prepare
-liftoff-status = liftoff.cmd:status
-

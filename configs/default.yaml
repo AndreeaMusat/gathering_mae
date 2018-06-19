@@ -20,7 +20,7 @@ reward_init_pos: [[0, 10, 16, 16, 20], [1, 10, 16, 16, 20]]
 use_cuda: no
 visualize_rgb: yes
 store_agents_trace: no
-visualize: no
+visualize: yes
 record_data:
   turned_on: no
   only_coord: no
