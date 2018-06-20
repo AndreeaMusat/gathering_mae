@@ -16,7 +16,7 @@ agents_laser_size: 2
 reward_distance: no
 reward_value: [1., -1.]
 reward_respawn_time: [4, 4]
-reward_init_pos: [[0, 10, 16, 16, 20], [1, 10, 16, 16, 20]]
+reward_init_pos: [[0, 20, 16, 16, 20], [1, 20, 16, 16, 20]]
 use_cuda: no
 visualize_rgb: yes
 store_agents_trace: no

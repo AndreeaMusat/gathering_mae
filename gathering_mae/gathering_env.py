@@ -365,21 +365,22 @@ class MapManager:
 
         # Generate for each initialized element an entry point with initialization
         el_init = dict()
-
+        el_not_init = []
         for ix_map, no_items, x, y, r in init_pos:
-
             x0 = max(0, x - r)
             x1 = min(map_x, x + r)
             y0 = max(0, y - r)
             y1 = min(map_y, y + r)
 
             empty_coord = (occupancy_map[x0:x1, y0:y1] == DEFAULT_ELEMENT_ID).nonzero()
-
+            empty_coord[:, 0].add_(x0)
+            empty_coord[:, 1].add_(y0)
             select_idxs = torch.randperm(empty_coord.size(0))
             if no_items == -1:
                 # Fill zone
                 no_items = empty_coord.size(0)
 
+            remaining_items = max(0, no_items-select_idxs.size(0))
             select_idxs = select_idxs[:no_items]
             if select_idxs.size(0) > 0:
                 for iselect in select_idxs:
@@ -387,10 +388,13 @@ class MapManager:
                     map_[ix_map, x_p, y_p] = 1
                     el_init[get_linear_pos(x_p, y_p, map_y).item()] = (ix_map, 1, x, y, r)
 
+            if remaining_items > 0:
+                el_not_init.append([ix_map, remaining_items, x, y, r])
+
             # Update occupancy map
             occupancy_map = occupancy_map + map_[ix_map]
 
-        return el_init
+        return el_init, el_not_init
 
     def build_static_map_views(self):
         static_map = self.base_static_map
@@ -661,9 +665,16 @@ class GatheringEnv(MultiAgentBaseEnv):
                         if init_gen == -1:
                             special_map[ix][coord] = 1.
                         else:
-                            self.el_init.update(map_manager.init_elements(special_map,
-                                                                          self.static_map,
-                                                                          init_gen))
+                            occupancy = special_map.sum(0)
+                            new_init, unsuccessful = map_manager.init_elements(special_map,
+                                                                               occupancy,
+                                                                               init_gen)
+                            # Que unsuccessful re-spawns
+                            if len(unsuccessful) > 0:
+                                next_stp = step_cnt + rewards_respawn_time[ix]
+                                el_rewards_respawn[ix].extend((next_stp, coord, unsuccessful))
+
+                            self.el_init.update(new_init)
 
                         if len(el_reward_respawn) <= 0:
                             break
@@ -774,8 +785,9 @@ class GatheringEnv(MultiAgentBaseEnv):
                                          self.agents_binary_map, self.agents_collide)
 
         if self.reward_init_pos:
-            self.el_init = self.map_manager.init_elements(self.special_map, self.static_map,
-                                                          self.reward_init_pos)
+            self.el_init, _ = self.map_manager.init_elements(self.special_map,
+                                                             self.static_map,
+                                                             self.reward_init_pos)
         else:
             self.el_init = dict()
 
