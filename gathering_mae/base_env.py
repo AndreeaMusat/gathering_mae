@@ -62,6 +62,12 @@ class MultiAgentBaseEnv:
     def render(self, *args, **kwargs):
         return self._render(*args, **kwargs)
 
+    def close(self):
+        self._close()
+
+    def _close(self):
+        pass
+
     def _render(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -84,3 +90,4 @@ class MultiAgentBaseEnv:
     @property
     def is_cuda(self):
         return self.use_cuda
+
