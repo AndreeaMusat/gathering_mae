@@ -387,6 +387,9 @@ class MapManager:
                     map_[ix_map, x_p, y_p] = 1
                     el_init[get_linear_pos(x_p, y_p, map_y).item()] = (ix_map, 1, x, y, r)
 
+            # Update occupancy map
+            occupancy_map = occupancy_map + map_[ix_map]
+
         return el_init
 
     def build_static_map_views(self):
