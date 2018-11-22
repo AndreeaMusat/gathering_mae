@@ -2,6 +2,15 @@
 
 Install with `python3 -m pip install .`
 
+Test using: 
+
+`python test_env.py`
+
+`python test_env_batch.py`
+
+`python test_env_visual.py`
+
+
 ## Config example & explanations
 
 name: "SingleAgentGatheringEnv" `# Name of the environment class`
