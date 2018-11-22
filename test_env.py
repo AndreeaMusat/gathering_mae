@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import time
 
-from env.gathering_env import GatheringEnv
+from gathering_mae import GatheringEnv
 from configs import get_config
 
 if __name__ == '__main__':
